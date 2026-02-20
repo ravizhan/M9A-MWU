@@ -73,6 +73,7 @@ jobs:
     env:
       UV_INDEX: https://pypi.org/simple
       repo_name: ${{ needs.meta.outputs.repo_name }}
+      tag: ${{ needs.meta.outputs.tag }}
     permissions:
       contents: write
     strategy:
@@ -136,21 +137,11 @@ jobs:
           curl -L https://github.com/ravizhan/MWU/raw/refs/heads/main/deploy/copy_resources.py -o ./copy_resources.py
           uv run ./copy_resources.py
 
-      - name: Compile Dependencies
-        if: false
-        shell: bash
-        run: |
-          curl -L https://github.com/ravizhan/MWU/raw/refs/heads/main/deploy/compile_deps.py -o ./compile_deps.py
-          uv run ./compile_deps.py
-
       - name: Download Dependencies
         shell: bash
         run: |
           curl -L https://github.com/ravizhan/MWU/raw/refs/heads/main/deploy/download_deps.py -o ./download_deps.py
           uv run ./download_deps.py
-
-      - name: Create Version file
-        run: echo "${{ github.ref_name }}" >> build/version
 
       - name: Download Artifact from Release
         id: download_artifact
@@ -166,22 +157,18 @@ jobs:
         run: |
           7z x ${{ fromJson(steps.download_artifact.outputs.downloaded_files)[0] }} -obuild -y
 
+      - name: Create Version file
+        run: echo "${{ env.tag }}" >> build/version
+
       - name: Compress Final Artifact
         run: |
-          7z a -t7z -mx=9 -mmt -ms -r ${{ env.repo_name }}-${{ needs.meta.outputs.tag }}-${{ matrix.platform }}-${{ matrix.arch }}.7z "./build/*"
-
-      - name: Breakpoint if tests failed
-        uses: namespacelabs/breakpoint-action@v0
-        if: failure()
-        with:
-          duration: 30m
-          authorized-users: ravizhan
+          7z a -t7z -mx=9 -mmt -ms -r ${{ env.repo_name }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.tag }}.7z "./build/*"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.repo_name }}-${{ needs.meta.outputs.tag }}-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ env.repo_name }}-${{ needs.meta.outputs.tag }}-${{ matrix.platform }}-${{ matrix.arch }}.7z
+          name: ${{ env.repo_name }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.tag }}
+          path: ${{ env.repo_name }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.tag }}.7z
 
   changelog:
     name: Generate changelog
@@ -205,6 +192,7 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
 
   debug:
+    if: ${{ needs.meta.outputs.is_release == 'false' }}
     runs-on: ubuntu-slim
     needs: [meta, build, changelog]
     steps:
